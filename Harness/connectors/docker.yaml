@@ -1,0 +1,14 @@
+connector:
+  name: docker
+  identifier: docker
+  description: ""
+  accountIdentifier: 0PGL-WuuRnOy9WzI2KJ0tA
+  type: DockerRegistry
+  spec:
+    dockerRegistryUrl: https://index.docker.io/v2/
+    providerType: DockerHub
+    auth:
+      type: Anonymous
+    executeOnDelegate: false
+    proxy: false
+    ignoreTestConnection: false

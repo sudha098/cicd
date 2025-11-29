@@ -1,0 +1,36 @@
+pipeline:
+  name: helloworld
+  identifier: helloworld
+  projectIdentifier: sudhaverma
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: sv
+        identifier: sv
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: false
+          caching:
+            enabled: true
+            override: false
+          platform:
+            os: Windows
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Run_1
+                  identifier: Run_1
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "sudha"
+                      pwd
+                      whoami
+                      ls -la

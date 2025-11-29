@@ -1,0 +1,13 @@
+infrastructureDefinition:
+  name: ns_myapp_pre_infradef
+  identifier: ns_myapp_pre_infradef
+  orgIdentifier: default
+  projectIdentifier: STO
+  environmentRef: GCP_PRE
+  deploymentType: Kubernetes
+  type: KubernetesDirect
+  spec:
+    connectorRef: account.mycluster
+    namespace: ns-myapp-pre
+    releaseName: release-<+INFRA_KEY_SHORT_ID>
+  allowSimultaneousDeployments: false

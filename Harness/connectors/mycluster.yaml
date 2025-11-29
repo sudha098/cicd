@@ -1,0 +1,12 @@
+connector:
+  name: mycluster
+  identifier: mycluster
+  description: ""
+  accountIdentifier: 0PGL-WuuRnOy9WzI2KJ0tA
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+    delegateSelectors:
+      - sudha-delegate
+    ignoreTestConnection: false

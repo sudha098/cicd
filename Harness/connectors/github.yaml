@@ -1,0 +1,23 @@
+connector:
+  name: sudha_github
+  identifier: sudha_github
+  description: ""
+  accountIdentifier: 0PGL-WuuRnOy9WzI2KJ0tA
+  type: Github
+  spec:
+    url: https://github.com/sudha098/harness
+    authentication:
+      type: Http
+      spec:
+        type: UsernameToken
+        spec:
+          username: sudha098
+          tokenRef: account.github_token
+    apiAccess:
+      type: Token
+      spec:
+        tokenRef: account.github_token
+    executeOnDelegate: false
+    proxy: false
+    ignoreTestConnection: false
+    type: Repo

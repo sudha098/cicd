@@ -1,0 +1,7 @@
+environment:
+  name: GCP PRE
+  identifier: GCP_PRE
+  tags: {}
+  type: PreProduction
+  orgIdentifier: default
+  projectIdentifier: STO

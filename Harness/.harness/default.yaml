@@ -1,0 +1,28 @@
+inputSet:
+  pipeline:
+    identifier: testing_codebase
+    stages:
+      - stage:
+          identifier: Create_git_repo
+          type: Custom
+          spec:
+            execution:
+              steps:
+                - step:
+                    identifier: create_git_repo
+                    type: ShellScript
+                    spec:
+                      environmentVariables:
+                        - name: REPONAME
+                          type: String
+                          value: harness_test
+                        - name: USER
+                          type: String
+                          value: sudha098
+                        - name: DESCRIPTION
+                          type: String
+                          value: testing
+  name: default
+  identifier: default
+  orgIdentifier: default
+  projectIdentifier: default_project

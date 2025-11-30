@@ -1,0 +1,70 @@
+pipeline:
+  name: testing_codebase
+  identifier: testing_codebase
+  projectIdentifier: default_project
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: create git repo
+                  identifier: create_git_repo
+                  spec:
+                    shell: Bash
+                    executionTarget: {}
+                    source:
+                      type: Inline
+                      spec:
+                        script: |-
+
+
+                          # https://gist.github.com/robwierzbowski/5430952/
+                          # Create and push to a new github repo from the command line.  
+                          # Grabs sensible defaults from the containing folder and `.gitconfig`.  
+                          # Refinements welcome.
+
+                          # Gather constant vars
+                          CURRENTDIR=${PWD##*/}
+                          GITHUBUSER=$(git config github.user)
+
+                          # Get user input
+                          read "REPONAME?New repo name (enter for ${PWD##*/}):"
+                          read "USER?Git Username (enter for ${GITHUBUSER}):"
+                          read "DESCRIPTION?Repo Description:"
+
+                          echo "Here we go..."
+
+                          # Curl some json to the github API oh damn we so fancy
+                          curl -u ${USER:-${GITHUBUSER}} https://api.github.com/user/repos -d "{\"name\": \"${REPONAME:-${CURRENTDIR}}\", \"description\": \"${DESCRIPTION}\", \"private\": false, \"has_issues\": true, \"has_downloads\": true, \"has_wiki\": false}"
+
+                          # Set the freshly created repo to the origin and push
+                          # You'll need to have added your public key to your github account
+                          git remote set-url origin git@github.com:${USER:-${GITHUBUSER}}/${REPONAME:-${CURRENTDIR}}.git
+                          git push --set-upstream origin master
+                    environmentVariables:
+                      - name: REPONAME
+                        type: String
+                        value: <+input>
+                      - name: USER
+                        type: String
+                        value: <+input>
+                      - name: DESCRIPTION
+                        type: String
+                        value: <+input>
+                    outputVariables: []
+                  timeout: 10m
+        tags: {}

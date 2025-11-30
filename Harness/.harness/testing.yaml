@@ -1,0 +1,44 @@
+pipeline:
+  name: testing
+  identifier: testing
+  projectIdentifier: default_project
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: build .tf file
+        identifier: build_tf_file
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Docker
+            spec: {}
+          caching:
+            enabled: false
+            paths: []
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: create file
+                  identifier: create_file
+                  spec:
+                    shell: Sh
+                    command: |-
+                      cat << EOF > main.tf
+                                # This is a sample main.tf file
+                                # You can add your Terraform configuration here
+                                provider "aws" {
+                                  region = "us-west-2"
+                                }
+
+                                resource "aws_instance" "example" {
+                                  ami           = "ami-0c55b159cbfafe1f0"
+                                  instance_type = "t2.micro"
+                                }
+                      EOF

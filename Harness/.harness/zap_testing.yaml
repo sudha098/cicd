@@ -1,0 +1,46 @@
+pipeline:
+  name: zap testing
+  identifier: zap_testing
+  projectIdentifier: STO
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: Dev ZAP Scan
+        identifier: dev_zap_scan
+        type: CI
+        spec:
+          cloneCodebase: false
+          execution:
+            steps:
+              - step:
+                  name: Run ZAP Baseline Scan
+                  identifier: run_zap_baseline
+                  type: Run
+                  spec:
+                    connectorRef: account.docker
+                    image: zaproxy/zap-stable:latest
+                    shell: Bash
+                    command: |-
+                      echo "Starting ZAP baseline scan against $DEV_APP_URL"
+
+                      mkdir -p /shared/scan_results
+
+                      # Minimal unauthenticated baseline scan
+                      zap-baseline.py \
+                        -t $DEV_APP_URL \
+                        -J /shared/scan_results/report.json \
+                        -r /shared/scan_results/report.html \
+                        -T 30
+
+                      echo "ZAP scan completed. Reports saved in /shared/scan_results"
+                    envVariables:
+                      DEV_APP_URL: https://juice-shop-dev.example.com
+          sharedPaths:
+            - /shared/scan_results
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}

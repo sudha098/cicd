@@ -1,0 +1,39 @@
+pipeline:
+  name: build_image
+  identifier: build_image
+  projectIdentifier: labs_sudha
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: Build Image
+        identifier: Build_Image
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: false
+          caching:
+            enabled: true
+            override: false
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: <+input>
+              namespace: <+input>
+              automountServiceAccountToken: true
+              nodeSelector: {}
+              imagePullPolicy: Always
+              os: Linux
+          execution:
+            steps:
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: BuildAndPushDockerRegistry
+                  identifier: BuildAndPushDockerRegistry
+                  spec:
+                    connectorRef: account.dockerhub_sudha
+                    repo: sudha098/node_app
+                    tags:
+                      - <+pipeline.executionId>
+                    dockerfile: Dockerfile
+                    context: .

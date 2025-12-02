@@ -1,0 +1,42 @@
+pipeline:
+  name: maven-cicd-demo
+  identifier: mavencicddemo
+  projectIdentifier: labs_sudha
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.github_sudha
+        repoName: maven_projects
+        build: <+input>
+  stages:
+    - stage:
+        name: Build App
+        identifier: Build_App
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              imageSpec:
+                imageName: ubuntu-22
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Build App
+                  identifier: Build_App
+                  spec:
+                    connectorRef: account.docker
+                    image: maven:3.6.3-jdk-11
+                    shell: Bash
+                    command: mvn -B clean test package

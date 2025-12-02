@@ -39,4 +39,7 @@ pipeline:
                     connectorRef: account.docker
                     image: maven:3.6.3-jdk-11
                     shell: Bash
-                    command: mvn -B clean test package
+                    command: |-
+                      cd maven-cicd-demo
+
+                      mvn -B clean test package

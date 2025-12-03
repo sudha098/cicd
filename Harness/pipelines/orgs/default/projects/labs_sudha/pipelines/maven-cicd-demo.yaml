@@ -43,3 +43,27 @@ pipeline:
                       cd maven-cicd-demo
 
                       mvn -B clean test package
+              - step:
+                  name: Build Docker Image
+                  identifier: Docker_Build
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |-
+                      export IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}"
+                      docker build -t $IMAGE .
+                      # echo $DOCKER_PASSWORD | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USERNAME} --password-stdin
+                      docker push $IMAGE
+                    envVariables:
+                      DOCKER_REGISTRY: index.docker.io
+                      IMAGE_NAME: sudha098/maven-cicd-demo
+                      TAG: ${CI_BUILD_NUMBER}-${git.commit}
+              - step:
+                  name: Save Artifact Info
+                  identifier: Save_Artifact
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "image=${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}" > artifact.properties
+                      cat artifact.properties

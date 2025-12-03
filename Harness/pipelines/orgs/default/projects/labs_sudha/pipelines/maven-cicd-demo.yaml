@@ -1,0 +1,84 @@
+pipeline:
+  name: maven-cicd-demo
+  identifier: mavencicddemo
+  projectIdentifier: labs_sudha
+  orgIdentifier: default
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.github_sudha
+        repoName: maven_projects
+        build: <+input>
+  stages:
+    - stage:
+        name: Build App
+        identifier: Build_App
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              imageSpec:
+                imageName: ubuntu-22
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Build App
+                  identifier: Build_App
+                  spec:
+                    connectorRef: account.docker
+                    image: maven:3.6.3-jdk-11
+                    shell: Bash
+                    command: |-
+                      cd maven-cicd-demo
+
+                      mvn -B clean test package
+              - step:
+                  name: Build Docker Image
+                  identifier: Docker_Build
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |-
+                      export IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}"
+                      cd maven-cicd-demo
+                      docker build -t $IMAGE .
+                      docker image ls
+                      echo <+secrets.getValue("account.docker_rw_pat")>
+                      echo <+secrets.getValue("account.docker_rw_pat")> | docker login -u sudha098 --password-stdin
+
+
+                      docker push $IMAGE
+                    envVariables:
+                      DOCKER_REGISTRY: index.docker.io
+                      IMAGE_NAME: sudha098/maven-cicd-demo
+                      TAG: <+pipeline.executionId>
+              - step:
+                  name: Save Artifact Info
+                  identifier: Save_Artifact
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "image=${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}" > artifact.properties
+                      cat artifact.properties
+                    envVariables:
+                      DOCKER_REGISTRY: index.docker.io
+                      IMAGE_NAME: sudha098/maven-cicd-demo
+                      TAG: <+pipeline.executionId>
+  variables:
+    - name: Deploy_to_Dev
+      type: String
+      description: ""
+      required: true
+      value: <+input>.default(false).selectOneFrom(true,false)

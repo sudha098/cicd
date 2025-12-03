@@ -53,7 +53,8 @@ pipeline:
                       export IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}"
                       cd maven-cicd-demo
                       docker build -t $IMAGE .
-                      echo "<+secrets.getValue(\"dockerhub_pass\")>" | docker login ${DOCKER_REGISTRY} -u sudha098 --password-stdin
+                      docker image ls
+                      echo "<+secrets.getValue(\"dockerhub_pass\")>" | docker login -u sudha098 --password-stdin
                       docker push $IMAGE
                     envVariables:
                       DOCKER_REGISTRY: index.docker.io

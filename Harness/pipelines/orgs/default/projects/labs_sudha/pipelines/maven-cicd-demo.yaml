@@ -54,9 +54,9 @@ pipeline:
                       cd maven-cicd-demo
                       docker build -t $IMAGE .
                       docker image ls
+                      echo <+secrets.getValue("account.docker_rw_pat")>
+                      echo <+secrets.getValue("account.docker_rw_pat")> | docker login -u sudha098 --password-stdin
 
-                      echo <+secret.getValue("account.docker_rw_pat")
-                      echo "<+secrets.getValue("account.docker_rw_pat")>" | docker login -u "sudha098" --password-stdin
 
                       docker push $IMAGE
                     envVariables:

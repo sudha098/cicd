@@ -51,6 +51,7 @@ pipeline:
                     shell: Bash
                     command: |-
                       export IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}"
+                      cd maven-cicd-demo
                       docker build -t $IMAGE .
                       # echo $DOCKER_PASSWORD | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USERNAME} --password-stdin
                       docker push $IMAGE

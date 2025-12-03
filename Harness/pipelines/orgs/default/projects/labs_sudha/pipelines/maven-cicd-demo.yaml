@@ -54,7 +54,7 @@ pipeline:
                       cd maven-cicd-demo
                       docker build -t $IMAGE .
                       docker image ls
-                      docker login -u sudha098 -p <+secrets.getValue("dockerhub_pass")>
+                      echo "<+secrets.getValue(\"dockerhub_pass\")>" | docker login -u "sudha098" --password-stdin
                       docker push $IMAGE
                     envVariables:
                       DOCKER_REGISTRY: index.docker.io

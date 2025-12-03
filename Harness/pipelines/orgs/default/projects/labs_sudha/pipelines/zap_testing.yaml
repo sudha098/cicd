@@ -1,0 +1,48 @@
+pipeline:
+  name: zap_testing
+  identifier: zap_testing
+  projectIdentifier: labs_sudha
+  orgIdentifier: default
+  tags: {}
+  stages:
+    - stage:
+        name: zap_testing
+        identifier: zap_testing
+        description: ""
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: Container
+                  name: run_test
+                  identifier: run_test
+                  spec:
+                    connectorRef: account.docker
+                    image: zaproxy/zap-stable:latest
+                    command: echo "Zap script"
+                    shell: Bash
+                    infrastructure:
+                      type: KubernetesDirect
+                      spec:
+                        connectorRef: <+input>
+                        namespace: <+input>
+                        resources:
+                          limits:
+                            cpu: "0.5"
+                            memory: 500Mi
+                        annotations: {}
+                        labels: {}
+                        containerSecurityContext:
+                          capabilities:
+                            drop: []
+                            add: []
+                        nodeSelector: {}
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths: []
+                    outputVariables: []
+                    envVariables: {}
+                  timeout: 30m
+        tags: {}

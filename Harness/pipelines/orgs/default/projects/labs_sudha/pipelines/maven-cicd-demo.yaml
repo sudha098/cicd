@@ -55,10 +55,8 @@ pipeline:
                       docker build -t $IMAGE .
                       docker image ls
 
-                      TOKEN="<+secrets.getValue(\"account.docker_ro_pat\")>"
-                      echo "TOKEN LENGTH: ${#TOKEN}"
-                      printf '%q\n' "$TOKEN"
-                      echo "$TOKEN" | docker login -u "sudha098" --password-stdin
+                      echo <+secret.getValue("account.docker_rw_pat")
+                      echo "<+secrets.getValue("account.docker_rw_pat")>" | docker login -u "sudha098" --password-stdin
 
                       docker push $IMAGE
                     envVariables:

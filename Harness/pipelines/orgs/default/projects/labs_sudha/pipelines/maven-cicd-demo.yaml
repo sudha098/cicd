@@ -53,7 +53,7 @@ pipeline:
                       export IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}"
                       cd maven-cicd-demo
                       docker build -t $IMAGE .
-                      # echo $DOCKER_PASSWORD | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USERNAME} --password-stdin
+                      echo "<+secrets.getValue(\"docker_pass\")>" | docker login ${DOCKER_REGISTRY} -u sudha098 --password-stdin
                       docker push $IMAGE
                     envVariables:
                       DOCKER_REGISTRY: index.docker.io
@@ -68,3 +68,7 @@ pipeline:
                     command: |
                       echo "image=${DOCKER_REGISTRY}/${IMAGE_NAME}:${TAG}" > artifact.properties
                       cat artifact.properties
+                    envVariables:
+                      DOCKER_REGISTRY: index.docker.io
+                      IMAGE_NAME: sudha098/maven-cicd-demo
+                      TAG: <+pipeline.executionId>

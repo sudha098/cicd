@@ -57,7 +57,7 @@ pipeline:
                     envVariables:
                       DOCKER_REGISTRY: index.docker.io
                       IMAGE_NAME: sudha098/maven-cicd-demo
-                      TAG: ${CI_BUILD_NUMBER}-${git.commit}
+                      TAG: <+pipeline.executionId>
               - step:
                   name: Save Artifact Info
                   identifier: Save_Artifact

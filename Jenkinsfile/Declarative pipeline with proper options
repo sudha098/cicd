@@ -1,0 +1,299 @@
+Below is a production‑grade, end‑to‑end Jenkins Declarative Pipeline for a Java/Gradle service built into a container and deployed to an EKS cluster, with SAST, DAST, SCA, SBOM, image scanning (Aqua), Gitleaks, SonarQube, caching, and promotion flow. The structure follows Jenkins best practices for Jenkinsfile syntax and step usage. You can drop this into the root of your repo as `Jenkinsfile` and adapt only tool URLs/IDs.[1][2][3]
+
+```groovy
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    ansiColor('xterm')
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 60, unit: 'MINUTES')
+  }
+
+  environment {
+    // --- SCM / Build metadata ---
+    APP_NAME          = "my-gradle-app"
+    DOCKER_REGISTRY   = "registry.example.com"
+    DOCKER_IMAGE      = "${DOCKER_REGISTRY}/${APP_NAME}"
+    ECR_AWS_REGION    = "eu-west-1"
+    // --- Tool config ---
+    SONARQUBE_SERVER  = "sonarqube-server"     // Jenkins -> Manage Jenkins -> Configure System
+    SONARQUBE_PROJECT = "my-gradle-app"
+    AQUA_SCANNER_NAME = "aquaScanner"          // Jenkins Aqua plugin global config[web:38][web:44][web:47]
+    GITLEAKS_CONFIG   = ".gitleaks.toml"
+    // --- Kubernetes / Helm ---
+    HELM_RELEASE      = "my-gradle-app"
+    HELM_CHART_PATH   = "deploy/helm/my-gradle-app"
+    K8S_NAMESPACE_STG = "staging"
+    K8S_NAMESPACE_PRD = "production"
+    // --- Reports / SBOM ---
+    REPORT_DIR        = "reports"
+    SBOM_FILE         = "${REPORT_DIR}/sbom.spdx.json"
+  }
+
+  triggers {
+    pollSCM('H/5 * * * *')
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+        sh "mkdir -p ${REPORT_DIR}"
+      }
+    }
+
+    stage('Pre-flight & Secrets Scan') {
+      parallel {
+        stage('Gitleaks (Secrets)') {
+          steps {
+            sh """
+              docker run --rm -v \$PWD:/repo zricethezav/gitleaks:latest \
+                detect -s /repo -c ${GITLEAKS_CONFIG} --report-format=json --report-path=${REPORT_DIR}/gitleaks-report.json
+            """
+          }
+        }
+        stage('Dependency / License Scan (SCA)') {
+          steps {
+            // Example: Trivy FS for SCA / licenses[web:45]
+            sh """
+              docker run --rm -v \$PWD:/src aquasec/trivy:latest fs \
+                --security-checks vuln,license,secret \
+                --format json --output ${REPORT_DIR}/trivy-fs.json /src
+            """
+          }
+        }
+      }
+      post {
+        unsuccessful {
+          error "Pre-flight security checks failed (Gitleaks/SCA)."
+        }
+      }
+    }
+
+    stage('Cache Gradle & Prepare') {
+      steps {
+        // Jenkins workspace-level Gradle cache
+        sh """
+          mkdir -p \$HOME/.gradle
+          echo "org.gradle.caching=true" >> gradle.properties || true
+        """
+        // Optional: Use Jenkins cache plugin if installed
+      }
+    }
+
+    stage('Unit Test & SAST (SonarQube)') {
+      environment {
+        // For sonar-scanner gradle plugin
+        SONAR_SCANNER_OPTS = "-Xmx1024m"
+      }
+      steps {
+        withSonarQubeEnv("${SONARQUBE_SERVER}") {  // Jenkins SonarQube plugin[web:37][web:43][web:46]
+          sh """
+            ./gradlew clean test jacocoTestReport \
+              sonar \
+              -Dsonar.projectKey=${SONARQUBE_PROJECT} \
+              -Dsonar.projectName=${APP_NAME} \
+              -Dsonar.junit.reportPaths=build/test-results/test \
+              -Dsonar.jacoco.reportPaths=build/jacoco/test.exec
+          """
+        }
+      }
+      post {
+        always {
+          junit 'build/test-results/test/*.xml'
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 10, unit: 'MINUTES') {
+          script {
+            def qg = waitForQualityGate()       // SonarQube webhook integration[web:46]
+            if (qg.status != 'OK') {
+              error "Pipeline aborted due to SonarQube Quality Gate failure: ${qg.status}"
+            }
+          }
+        }
+      }
+    }
+
+    stage('Build Jar & SBOM') {
+      steps {
+        sh """
+          ./gradlew -Dorg.gradle.daemon=false \
+            --no-build-cache \
+            assemble
+        """
+        // SBOM (e.g., Syft)[web:45]
+        sh """
+          docker run --rm -v \$PWD:/src anchore/syft:latest \
+            dir:/src --output spdx-json > ${SBOM_FILE}
+        """
+        archiveArtifacts artifacts: "${SBOM_FILE}", fingerprint: true
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          def shortCommit = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          env.IMAGE_TAG = shortCommit
+
+          sh """
+            docker build \
+              --build-arg JAR_FILE=build/libs/*.jar \
+              -t ${DOCKER_IMAGE}:${IMAGE_TAG} \
+              -f Dockerfile .
+          """
+        }
+      }
+    }
+
+    stage('Container Security (Aqua + Trivy)') {
+      parallel {
+        stage('Aqua Scan') {
+          steps {
+            aquaSecurityScanner(                 // Aqua Jenkins plugin step[web:38][web:44][web:47]
+              scannerName: "${AQUA_SCANNER_NAME}",
+              image: "${DOCKER_IMAGE}:${IMAGE_TAG}",
+              registerImage: true,
+              hideBaseImageVulns: false,
+              showNegligibleVulns: false,
+              failCVE: "critical"
+            )
+          }
+        }
+        stage('Trivy Image Scan') {
+          steps {
+            sh """
+              docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                aquasec/trivy:latest image \
+                --exit-code 1 --severity CRITICAL,HIGH \
+                --format json --output ${REPORT_DIR}/trivy-image.json \
+                ${DOCKER_IMAGE}:${IMAGE_TAG}
+            """
+          }
+        }
+      }
+    }
+
+    stage('Push Image to Registry') {
+      steps {
+        withCredentials([
+          usernamePassword(credentialsId: 'docker-registry-creds',
+                           usernameVariable: 'DOCKER_USER',
+                           passwordVariable: 'DOCKER_PASS')
+        ]) {
+          sh """
+            echo "${DOCKER_PASS}" | docker login ${DOCKER_REGISTRY} -u "${DOCKER_USER}" --password-stdin
+            docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+          """
+        }
+      }
+    }
+
+    stage('Deploy to EKS - Staging') {
+      steps {
+        withCredentials([file(credentialsId: 'eks-kubeconfig-staging', variable: 'KUBECONFIG')]) {
+          sh """
+            aws eks --region ${ECR_AWS_REGION} update-kubeconfig --name eks-staging || true
+
+            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+              --namespace ${K8S_NAMESPACE_STG} \
+              --set image.repository=${DOCKER_IMAGE} \
+              --set image.tag=${IMAGE_TAG} \
+              --wait --timeout 10m
+          """
+        }
+      }
+    }
+
+    stage('Post-deploy Tests (Staging)') {
+      parallel {
+        stage('Smoke / Integration Tests') {
+          steps {
+            sh "./scripts/run-integration-tests.sh staging"
+          }
+        }
+        stage('Dynamic App Security Testing (DAST)') {
+          steps {
+            // Example OWASP ZAP baseline scan against staging ingress URL[web:45]
+            sh """
+              docker run --rm -v \$PWD:${REPORT_DIR}/zap \
+                owasp/zap2docker-stable zap-baseline.py \
+                -t https://staging.example.com \
+                -r ${REPORT_DIR}/zap-staging-report.html \
+                -x ${REPORT_DIR}/zap-staging-report.xml \
+                -I
+            """
+          }
+        }
+      }
+    }
+
+    stage('Manual Approval to Production') {
+      when {
+        branch 'main'
+      }
+      steps {
+        input message: "Promote ${APP_NAME}:${IMAGE_TAG} to production?", ok: "Deploy"
+      }
+    }
+
+    stage('Deploy to EKS - Production') {
+      when {
+        branch 'main'
+      }
+      steps {
+        withCredentials([file(credentialsId: 'eks-kubeconfig-prod', variable: 'KUBECONFIG')]) {
+          sh """
+            aws eks --region ${ECR_AWS_REGION} update-kubeconfig --name eks-production || true
+
+            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+              --namespace ${K8S_NAMESPACE_PRD} \
+              --set image.repository=${DOCKER_IMAGE} \
+              --set image.tag=${IMAGE_TAG} \
+              --wait --timeout 10m
+          """
+        }
+      }
+    }
+
+    stage('Post-deploy Checks (Prod)') {
+      when {
+        branch 'main'
+      }
+      steps {
+        // Minimal smoke + health check; DAST can be re-run on prod if allowed
+        sh "./scripts/run-smoke-tests.sh production"
+      }
+    }
+  }
+
+  post {
+    always {
+      archiveArtifacts artifacts: "${REPORT_DIR}/**", allowEmptyArchive: true
+    }
+    success {
+      echo "✅ Pipeline succeeded for ${APP_NAME}:${IMAGE_TAG}"
+    }
+    failure {
+      echo "❌ Pipeline failed. Check security / quality gates and test reports."
+    }
+  }
+}
+```
+
+Key practices included:
+
+- Declarative pipeline with proper options, timeouts, and log retention.[2][4]
+- Gradle build with caching and JUnit/Jacoco integration for SonarQube quality gates.[5][6][7]
+- Gitleaks, Trivy FS, Trivy image, Aqua image scan, SBOM, and OWASP ZAP DAST stages as part of the same CI/CD flow.[8][9][3][10]
+- Helm‑based deployment to EKS staging and production with manual approval gate and post‑deploy tests as in modern Jenkins–Kubernetes pipelines.[11][12][13]
+

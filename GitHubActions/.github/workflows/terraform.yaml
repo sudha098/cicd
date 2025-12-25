@@ -1,0 +1,116 @@
+# .github/workflows/terraform.yml
+name: Infrastructure (Terraform)
+
+on:
+  workflow_dispatch:  # Manual trigger for infra changes
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/terraform.yml'
+
+env:
+  TF_VERSION: '1.9.5'
+  AWS_REGION: 'us-east-1'
+  TERRAFORM_DIR: 'infra/terraform'
+  BACKEND_BUCKET: 'myorg-terraform-state'
+  BACKEND_KEY: 'eks-cluster/terraform.tfstate'
+
+permissions:
+  id-token: write      # OIDC for AWS
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tf_version: ${{ steps.tf-init.outputs.terraform_version }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config="bucket=${{ env.BACKEND_BUCKET }}" -backend-config="key=${{ env.BACKEND_KEY }}"
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          
+      - name: Terraform Validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform validate -no-color
+        
+      - name: Terraform Format Check
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform fmt -check -recursive
+        
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform plan -no-color \
+            -var="environment=prod" \
+            -out=tfplan \
+            -input=false
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          
+      - name: Save Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TERRAFORM_DIR }}/tfplan
+
+  security-scan:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkov (IaC Security)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ env.TERRAFORM_DIR }}
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          
+      - name: TFLint
+        uses: terraform-linters/tflint-action@v5
+        with:
+          path: ${{ env.TERRAFORM_DIR }}
+          
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+
+  apply:
+    needs: [validate, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production  # GitHub Environments for approval
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.validate.outputs.tf_version }}
+          
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TERRAFORM_DIR }}
+          
+      - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform init -backend-config="bucket=${{ env.BACKEND_BUCKET }}" -backend-config="key=${{ env.BACKEND_KEY }}"
+          terraform apply -auto-approve tfplan
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
